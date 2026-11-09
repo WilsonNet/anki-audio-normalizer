@@ -185,3 +185,28 @@ class TestFxChainAndExtraction:
         assert res2["status"] == "skipped"
         assert res2["reason"] == "cached"
 
+        # Verify no duplicate or temp files were created in the media directory
+        assert os.listdir(str(tmp_path)) == ["quiet.mp3"]
+
+    def test_in_place_overwrite_preserves_inode_and_creates_no_duplicates(self, tmp_path):
+        mp3_path = str(tmp_path / "sentence.mp3")
+        pcm = _make_sine_pcm(sample_rate=24000, duration_s=1.0, amplitude=1500)
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(24000)
+            w.writeframes(pcm.tobytes())
+        import subprocess
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-f", "wav", "-i", "pipe:0", "-c:a", "libmp3lame", "-q:a", "2", mp3_path],
+            input=buf.getvalue(),
+            check=True,
+        )
+        inode_before = os.stat(mp3_path).st_ino
+        res = addon.normalize_audio_file(mp3_path, config=addon.DEFAULT_CONFIG, force=True, cache={})
+        assert res["status"] == "normalized"
+        assert os.stat(mp3_path).st_ino == inode_before
+        assert os.listdir(str(tmp_path)) == ["sentence.mp3"]
+
+

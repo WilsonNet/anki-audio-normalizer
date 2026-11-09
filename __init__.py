@@ -411,7 +411,7 @@ def normalize_audio_file(filepath, config=None, force=False, cache=None):
 
     fd, tmp_path = tempfile.mkstemp(
         suffix=ext,
-        dir=os.path.dirname(filepath),
+        dir=tempfile.gettempdir(),
         prefix=".anki_norm_",
     )
     os.close(fd)
@@ -436,8 +436,14 @@ def normalize_audio_file(filepath, config=None, force=False, cache=None):
             _trace(f"ffmpeg encode failed for {filepath}: {enc.stderr.decode('utf-8', 'ignore')[:200]}")
             return {"status": "error", "reason": "encode_failed"}
 
-        os.chmod(tmp_path, 0o644)
-        os.replace(tmp_path, filepath)
+        # Hard in-place modification of the original file in collection.media
+        # (never creates a second file or duplicate in collection.media).
+        with open(tmp_path, "rb") as src:
+            new_bytes = src.read()
+        os.unlink(tmp_path)
+        with open(filepath, "wb") as dst:
+            dst.write(new_bytes)
+
         _mark_cached(filepath, config, cache)
         if own_cache:
             _save_cache(cache)
@@ -521,6 +527,18 @@ def _on_note_will_be_added(col, note, deck_id):
         normalize_note_audio(note, config=config, force=False, media_dir=media_dir)
     except Exception as e:
         _trace(f"_on_note_will_be_added error: {e}")
+
+
+def _on_note_will_flush(note):
+    config = _get_config()
+    if not config.get("auto_normalize", True):
+        return
+    try:
+        col = getattr(note, "col", None)
+        media_dir = col.media.dir() if col is not None else None
+        normalize_note_audio(note, config=config, force=False, media_dir=media_dir)
+    except Exception as e:
+        _trace(f"_on_note_will_flush error: {e}")
 
 
 def _on_add_cards_did_add_note(note):
@@ -931,6 +949,7 @@ def _run_diagnostics():
 
 def _init():
     anki_hooks.note_will_be_added.append(_on_note_will_be_added)
+    anki_hooks.note_will_flush.append(_on_note_will_flush)
     gui_hooks.add_cards_did_add_note.append(_on_add_cards_did_add_note)
     gui_hooks.editor_did_unfocus_field.append(_on_editor_did_unfocus_field)
     gui_hooks.editor_did_init_buttons.append(_on_editor_buttons)
