@@ -1,0 +1,12 @@
+{
+    "target_dbfs": -14.0,
+    "auto_normalize": true,
+    "audio_fields": "Audio, Sentence Audio",
+    "highpass_enabled": true,
+    "highpass_hz": 80,
+    "voice_eq_enabled": true,
+    "compressor_enabled": true,
+    "soft_limiter_enabled": true,
+    "fade_edges_enabled": true,
+    "shortcut": "Ctrl+Shift+N"
+}
